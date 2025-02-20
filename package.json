@@ -1,0 +1,29 @@
+{
+  "name": "nft-marketplace",
+  "version": "1.0.0",
+  "description": "NFT Marketplace with Collections and Drops",
+  "scripts": {
+    "test": "hardhat test",
+    "coverage": "hardhat coverage",
+    "compile": "hardhat compile",
+    "deploy": "hardhat run scripts/deploy/01_deploy_all.js",
+    "lint": "solhint 'contracts/**/*.sol'",
+    "prettier": "prettier --write 'contracts/**/*.sol' 'test/**/*.js'"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.12",
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@nomiclabs/hardhat-etherscan": "^3.1.7",
+    "@nomiclabs/hardhat-waffle": "^2.0.5",
+    "@openzeppelin/contracts": "^4.8.3",
+    "@openzeppelin/contracts-upgradeable": "^4.4.0",
+    "chai": "^4.3.7",
+    "dotenv": "^16.0.3",
+    "ethereum-waffle": "^3.4.4",
+    "ethers": "^5.7.2",
+    "hardhat": "^2.14.0",
+    "prettier": "^2.5.1",
+    "solhint": "^3.3.6",
+    "solidity-coverage": "^0.8.2"
+  }
+}
