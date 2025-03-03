@@ -10,10 +10,27 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "../interfaces/ICollection.sol";
 
 contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
+    enum ListingType { FIXED_PRICE, AUCTION }
+    enum AuctionStatus { ACTIVE, ENDED, CANCELLED }
     struct Listing {
         address seller;
         uint256 price;
         uint256 quantity;
+        ListingType listingType;
+        uint256 auctionId;  // 0 for fixed price listings
+    }
+
+    struct AuctionDetails {
+        address seller;
+        uint256 startPrice;
+        uint256 currentPrice;
+        uint256 minBidIncrement;
+        uint256 startTime;
+        uint256 endTime;
+        uint256 tokenId;
+        uint256 quantity;
+        address highestBidder;
+        AuctionStatus status;
     }
     
     uint256 public primaryFee;
@@ -22,17 +39,61 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
     address public collectionFactory;
     uint256 public totalCollections;
     IERC20 public immutable designatedToken;
+
+    uint256 private _auctionIds;
+    uint256 public minAuctionDuration;
+    uint256 public maxAuctionDuration;
+    uint256 public auctionExtensionInterval;
     
     mapping(address => mapping(uint256 => mapping(address => Listing))) public listings;
     mapping(address => bool) public registeredCollections;
     mapping(uint256 => address) private collectionIndex;
+    mapping(uint256 => AuctionDetails) public auctions;
+    mapping(uint256 => mapping(address => uint256)) public bids;
+    mapping(uint256 => address) public auctionCollections;
     
-    event NFTListed(address indexed collection, uint256 indexed tokenId, address seller, uint256 price, uint256 quantity);
+    event NFTListed(
+        address indexed collection, 
+        uint256 indexed tokenId, 
+        address seller, 
+        uint256 price, 
+        uint256 quantity,
+        ListingType listingType,
+        uint256 auctionId
+    );
     event NFTSold(address indexed collection, uint256 indexed tokenId, address seller, address buyer, uint256 price, uint256 quantity);
     event ListingRemoved(address indexed collection, uint256 indexed tokenId, address seller);
+    event AuctionCreated(
+        uint256 indexed auctionId,
+        address indexed collection,
+        uint256 indexed tokenId,
+        address seller,
+        uint256 startPrice,
+        uint256 minBidIncrement,
+        uint256 startTime,
+        uint256 endTime,
+        uint256 quantity
+    );
+
+    event BidPlaced(
+        uint256 indexed auctionId,
+        address indexed bidder,
+        uint256 amount
+    );
+
+    event AuctionSettled(
+        uint256 indexed auctionId,
+        address indexed winner,
+        uint256 amount
+    );
+
+    event AuctionCancelled(uint256 indexed auctionId);
+    event AuctionExtended(uint256 indexed auctionId, uint256 newEndTime);
+
     event FeeUpdated(bool isPrimary, uint256 newFee);
     event MaxRoyaltyUpdated(uint256 newMaxRoyalty);
     event CollectionRegistered(address indexed collection);
+    event AuctionExtensionIntervalUpdated(uint256 newInterval);
     
     constructor(
         address _designatedToken,
@@ -49,6 +110,9 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         primaryFee = _primaryFee;
         secondaryFee = _secondaryFee;
         maxRoyaltyPercentage = _maxRoyaltyPercentage;
+        minAuctionDuration = 1 hours;
+        maxAuctionDuration = 30 days;
+        auctionExtensionInterval = 10 minutes;
     }
     
     function setCollectionFactory(address _factory) external onlyOwner {
@@ -109,24 +173,46 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         emit NFTSold(collection, tokenId, nftDetails.creator, msg.sender, nftDetails.price, quantity);
     }
     
-    function listNFT(
+     function listNFT(
         address collection,
         uint256 tokenId,
         uint256 price,
         uint256 quantity
-    ) external {
+    ) external nonReentrant {
         require(registeredCollections[collection], "Collection not registered");
         require(price > 0, "Invalid price");
         require(quantity > 0, "Invalid quantity");
-        require(IERC1155(collection).balanceOf(msg.sender, tokenId) >= quantity, "Insufficient balance");
-        
+        require(
+            IERC1155(collection).balanceOf(msg.sender, tokenId) >= quantity,
+            "Insufficient balance"
+        );
+
+        // Check if NFT is already listed by this seller
+        Listing storage existingListing = listings[collection][tokenId][msg.sender];
+        require(
+            existingListing.quantity == 0 || 
+            (existingListing.listingType == ListingType.AUCTION && 
+             auctions[existingListing.auctionId].status != AuctionStatus.ACTIVE), 
+            "Already listed"
+        );
+
         listings[collection][tokenId][msg.sender] = Listing({
             seller: msg.sender,
             price: price,
-            quantity: quantity
+            quantity: quantity,
+            listingType: ListingType.FIXED_PRICE,
+            auctionId: 0
         });
-        
-        emit NFTListed(collection, tokenId, msg.sender, price, quantity);
+
+        emit NFTListed(
+            collection, 
+            tokenId, 
+            msg.sender, 
+            price, 
+            quantity,
+            ListingType.FIXED_PRICE,
+            0
+        );
     }
     
     function removeListing(
@@ -135,6 +221,23 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
     ) external {
         Listing storage listing = listings[collection][tokenId][msg.sender];
         require(listing.seller == msg.sender && listing.quantity > 0, "No active listing");
+
+        if (listing.listingType == ListingType.AUCTION) {
+            AuctionDetails storage auction = auctions[listing.auctionId];
+            require(auction.status == AuctionStatus.ACTIVE, "Auction not active");
+            require(auction.highestBidder == address(0), "Bids already placed");
+            
+            auction.status = AuctionStatus.CANCELLED;
+            IERC1155(collection).safeTransferFrom(
+                address(this),
+                msg.sender,
+                tokenId,
+                listing.quantity,
+                ""
+            );
+            
+            emit AuctionCancelled(listing.auctionId);
+        }
         
         delete listings[collection][tokenId][msg.sender];
         
@@ -150,16 +253,17 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         require(registeredCollections[collection], "Collection not registered");
         Listing storage listing = listings[collection][tokenId][seller];
         require(listing.seller == seller && listing.quantity > 0, "Invalid listing");
+        require(listing.listingType == ListingType.FIXED_PRICE, "Not a fixed price listing");
         require(listing.quantity >= quantity, "Insufficient quantity");
         
         uint256 totalPrice = listing.price * quantity;
         uint256 platformFee = (totalPrice * secondaryFee) / 1000;
         ICollection.NFTDetails memory nftDetails = ICollection(collection).nftDetails(tokenId);
-        uint256 creatorFee = (totalPrice * nftDetails.royaltyPercentage) / 1000;
-        uint256 sellerAmount = totalPrice - platformFee - creatorFee;
+        uint256 royaltyFee  = (totalPrice * nftDetails.royaltyPercentage) / 1000;
+        uint256 sellerAmount = totalPrice - platformFee - royaltyFee;
         
         designatedToken.transferFrom(msg.sender, address(this), platformFee);
-        designatedToken.transferFrom(msg.sender, nftDetails.creator, creatorFee);
+        designatedToken.transferFrom(msg.sender, nftDetails.creator, royaltyFee);
         designatedToken.transferFrom(msg.sender, seller, sellerAmount);
         
         IERC1155(collection).safeTransferFrom(seller, msg.sender, tokenId, quantity, "");
@@ -246,5 +350,247 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         address seller
     ) external view returns (Listing memory) {
         return listings[collection][tokenId][seller];
+    }
+
+     function createAuction(
+        address collection,
+        uint256 tokenId,
+        uint256 quantity,
+        uint256 startPrice,
+        uint256 minBidIncrement,
+        uint256 duration
+    ) external nonReentrant returns (uint256) {
+        _validateAuctionParams(
+            collection,
+            tokenId,
+            quantity,
+            startPrice,
+            minBidIncrement,
+            duration
+        );
+
+        _auctionIds++;
+        uint256 auctionId = _auctionIds;
+        
+        _createAuctionListing(
+            collection,
+            tokenId,
+            quantity,
+            startPrice,
+            auctionId
+        );
+
+        _setupAuction(
+            auctionId,
+            collection,
+            tokenId,
+            quantity,
+            startPrice,
+            minBidIncrement,
+            duration
+        );
+
+        return auctionId;
+    }
+
+    function _validateAuctionParams(
+        address collection,
+        uint256 tokenId,
+        uint256 quantity,
+        uint256 startPrice,
+        uint256 minBidIncrement,
+        uint256 duration
+    ) internal view {
+        require(registeredCollections[collection], "Collection not registered");
+        require(quantity > 0, "Invalid quantity");
+        require(startPrice > 0, "Invalid start price");
+        require(minBidIncrement > 0, "Invalid min bid increment");
+        require(duration >= minAuctionDuration && duration <= maxAuctionDuration, "Invalid duration");
+        require(
+            IERC1155(collection).balanceOf(msg.sender, tokenId) >= quantity,
+            "Insufficient balance"
+        );
+        require(
+            IERC1155(collection).isApprovedForAll(msg.sender, address(this)),
+            "Not approved"
+        );
+
+        Listing storage existingListing = listings[collection][tokenId][msg.sender];
+        require(
+            existingListing.quantity == 0 || 
+            (existingListing.listingType == ListingType.AUCTION && 
+             auctions[existingListing.auctionId].status != AuctionStatus.ACTIVE), 
+            "Already listed"
+        );
+    }
+
+    function _createAuctionListing(
+        address collection,
+        uint256 tokenId,
+        uint256 quantity,
+        uint256 startPrice,
+        uint256 auctionId
+    ) internal {
+        listings[collection][tokenId][msg.sender] = Listing({
+            seller: msg.sender,
+            price: startPrice,
+            quantity: quantity,
+            listingType: ListingType.AUCTION,
+            auctionId: auctionId
+        });
+
+        emit NFTListed(
+            collection, 
+            tokenId, 
+            msg.sender, 
+            startPrice, 
+            quantity,
+            ListingType.AUCTION,
+            auctionId
+        );
+    }
+
+    function _setupAuction(
+        uint256 auctionId,
+        address collection,
+        uint256 tokenId,
+        uint256 quantity,
+        uint256 startPrice,
+        uint256 minBidIncrement,
+        uint256 duration
+    ) internal {
+        uint256 startTime = block.timestamp;
+        uint256 endTime = startTime + duration;
+
+        auctions[auctionId] = AuctionDetails({
+            seller: msg.sender,
+            startPrice: startPrice,
+            currentPrice: startPrice,
+            minBidIncrement: minBidIncrement,
+            startTime: startTime,
+            endTime: endTime,
+            tokenId: tokenId,
+            quantity: quantity,
+            highestBidder: address(0),
+            status: AuctionStatus.ACTIVE
+        });
+
+        auctionCollections[auctionId] = collection;
+
+        IERC1155(collection).safeTransferFrom(
+            msg.sender,
+            address(this),
+            tokenId,
+            quantity,
+            ""
+        );
+
+        emit AuctionCreated(
+            auctionId,
+            collection,
+            tokenId,
+            msg.sender,
+            startPrice,
+            minBidIncrement,
+            startTime,
+            endTime,
+            quantity
+        );
+    }
+
+    function placeBid(uint256 auctionId, uint256 bidAmount) external nonReentrant {
+        AuctionDetails storage auction = auctions[auctionId];
+        require(auction.status == AuctionStatus.ACTIVE, "Auction not active");
+        require(block.timestamp <= auction.endTime, "Auction ended");
+        require(bidAmount >= auction.currentPrice + auction.minBidIncrement, "Bid too low");
+
+        // Check if bid is placed near the end
+        if (auction.endTime - block.timestamp <= auctionExtensionInterval) {
+            auction.endTime = block.timestamp + auctionExtensionInterval;
+            emit AuctionExtended(auctionId, auction.endTime);
+        }
+
+        address previousBidder = auction.highestBidder;
+        uint256 previousBid = bids[auctionId][previousBidder];
+
+        if (previousBidder != address(0)) {
+            designatedToken.transfer(previousBidder, previousBid);
+        }
+
+        require(
+            designatedToken.transferFrom(msg.sender, address(this), bidAmount),
+            "Transfer failed"
+        );
+
+        auction.highestBidder = msg.sender;
+        auction.currentPrice = bidAmount;
+        bids[auctionId][msg.sender] = bidAmount;
+
+        emit BidPlaced(auctionId, msg.sender, bidAmount);
+    }
+
+    function settleAuction(uint256 auctionId) external nonReentrant {
+        AuctionDetails storage auction = auctions[auctionId];
+        require(auction.status == AuctionStatus.ACTIVE, "Auction not active");
+        require(block.timestamp > auction.endTime, "Auction not ended");
+        require(auction.highestBidder != address(0), "No bids placed");
+
+        auction.status = AuctionStatus.ENDED;
+        address collection = auctionCollections[auctionId];
+        uint256 finalPrice = auction.currentPrice;
+
+        // Calculate fees
+        uint256 platformFee = (finalPrice * secondaryFee) / 1000;
+        ICollection.NFTDetails memory nftDetails = ICollection(collection).nftDetails(auction.tokenId);
+        uint256 royaltyFee = (finalPrice * nftDetails.royaltyPercentage) / 1000;
+        uint256 sellerAmount = finalPrice - platformFee - royaltyFee;
+
+        // Distribute funds
+        designatedToken.transfer(nftDetails.creator, royaltyFee);
+        designatedToken.transfer(auction.seller, sellerAmount);
+
+        // Transfer NFT
+        IERC1155(collection).safeTransferFrom(
+            address(this),
+            auction.highestBidder,
+            auction.tokenId,
+            auction.quantity,
+            ""
+        );
+
+        // Remove listing
+        delete listings[collection][auction.tokenId][auction.seller];
+
+        emit AuctionSettled(auctionId, auction.highestBidder, finalPrice);
+    }
+
+    function cancelAuction(uint256 auctionId) external nonReentrant {
+        AuctionDetails storage auction = auctions[auctionId];
+        require(auction.status == AuctionStatus.ACTIVE, "Auction not active");
+        require(msg.sender == auction.seller, "Not seller");
+        require(auction.highestBidder == address(0), "Bids already placed");
+
+        auction.status = AuctionStatus.CANCELLED;
+        address collection = auctionCollections[auctionId];
+
+        IERC1155(collection).safeTransferFrom(
+            address(this),
+            auction.seller,
+            auction.tokenId,
+            auction.quantity,
+            ""
+        );
+
+        // Remove listing
+        delete listings[collection][auction.tokenId][auction.seller];
+
+        emit AuctionCancelled(auctionId);
+        emit ListingRemoved(collection, auction.tokenId, auction.seller);
+    }
+
+    function setAuctionExtensionInterval(uint256 _interval) external onlyOwner {
+        require(_interval > 0, "Invalid interval");
+        auctionExtensionInterval = _interval;
+        emit AuctionExtensionIntervalUpdated(_interval);
     }
 }
