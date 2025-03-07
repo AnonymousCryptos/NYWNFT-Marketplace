@@ -1,267 +1,328 @@
-# NFT Marketplace Documentation
+# NFT Marketplace Technical Documentation
 
-## Overview
-The NFT marketplace is a decentralized platform that enables users to create collections, mint NFTs, and trade them. It supports both regular collections and scheduled drops, with all trades conducted through a designated ERC20 token.
+## Table of Contents
+1. [System Overview](#system-overview)
+2. [Features](#features)
+3. [Contract Architecture](#contract-architecture)
+4. [Contract Details](#contract-details)
+5. [Integration Guidelines](#integration-guidelines)
+6. [Events Reference](#events-reference)
 
-## Core Components
+## System Overview
 
-### Collection Factory
-The central contract that manages the creation and tracking of all collections.
+The NFT Marketplace is a comprehensive platform for trading ERC1155 tokens with multiple trading mechanisms and configurable fees.
 
-#### Key Features:
-- Create regular collections
-- Create scheduled drops
-- Track collection ownership
-- Verify collection authenticity
+### Supported Standards
+- NFTs: ERC1155 (Multi-token standard)
+- Payment: Any ERC20 token (configurable during deployment)
 
-### Collections (ERC1155)
-Collections are containers for NFTs with shared characteristics.
+### Key Components
+- Collection Management
+- Time-based Drops
+- Fixed Price Trading
+- Auction System
+- Offer Mechanism
+- Configurable Fees
+- Royalty Distribution
 
-#### Types:
-1. **Regular Collections**
-   - Instant availability
-   - No time restrictions
-   - Immediate trading capability
+## Features
 
-2. **Scheduled Drops**
-   - Time-gated availability
-   - Scheduled release
-   - Pre-configured start time
+### 1. Collection Management
 
-### Marketplace
-Handles all trading activities and fee management.
+#### Standard Collections
+- Create unlimited NFT types within a collection
+- Configure royalties per NFT
+- Set maximum supply per NFT
+- Custom metadata URI per NFT
+- Immediate minting capability
+- Ownership management
 
-#### Features:
-- Primary market sales
-- Secondary market trading
-- Fee distribution
-- Royalty management
+#### Time-based Drops
+- Schedule NFT releases
+- Configurable start time
+- Modifiable release schedule
+- Time-locked minting
+- All standard collection features
+- Automatic time validation
 
-## Function Guide
+### 2. Trading Mechanisms
 
-### Collection Creation
+#### Fixed Price Listings
+- List NFTs at fixed prices
+- Partial quantity listings
+- Multiple active listings per NFT
+- Batch purchase support
+- Automatic fee distribution
+- Listing management
 
-#### Regular Collection
+#### Auction System
+Features:
+- English auction style
+- Configurable duration
+- Minimum bid increments
+- Automatic time extensions
+- Bid refund mechanism
+- Settlement and cancellation options
+
+States:
+- ACTIVE: Ongoing auction
+- ENDED: Completed auction
+- CANCELLED: Terminated auction
+
+#### Offer System
+Features:
+- Make offers on any NFT
+- Partial quantity offers
+- Multiple active offers
+- Offer expiration handling
+- Automatic payment handling
+
+States:
+- PENDING: Active offer
+- ACCEPTED: Completed offer
+- REJECTED: Declined offer
+- CANCELLED: Withdrawn offer
+
+### 3. Fee Structure
+
+All fees are configurable.
+
+#### Platform Fees
+- Primary Sales
+- Secondary Sales
+- Fee recipient: Marketplace owner
+- Configurable by: Marketplace owner
+- Update frequency: Anytime
+
+#### Creator Royalties
+- Configurable per NFT
+- Applied to all sales
+- Automatic distribution
+- Set during NFT creation
+- Non-modifiable after creation
+
+## Contract Architecture
+
 ```
-Function: createCollection(string name, string description, address designatedToken, bool isDrop, uint256 startTime)
-Parameters:
-- name: Collection name
-- description: Collection description
-- designatedToken: Address of trading token
-- isDrop: false
-- startTime: 0 (unused for regular collections)
+CollectionFactory
+├── BaseCollection
+│   └── NFT Management
+└── Drop
+    └── Time-based Features
 
-Returns: Collection address
-Events Emitted: CollectionCreated(address collection, address owner, bool isDrop)
-```
-
-#### Scheduled Drop
-```
-Function: createCollection(string name, string description, address designatedToken, bool isDrop, uint256 startTime)
-Parameters:
-- name: Drop name
-- description: Drop description
-- designatedToken: Address of trading token
-- isDrop: true
-- startTime: Unix timestamp for release
-
-Returns: Collection address
-Events Emitted: CollectionCreated(address collection, address owner, bool isDrop)
-```
-
-### NFT Management
-
-#### Create NFT
-```
-Function: createNFT(string uri, uint256 maxSupply, uint256 price, uint256 royaltyPercentage)
-Parameters:
-- uri: Metadata URI (IPFS recommended)
-- maxSupply: Maximum number of copies
-- price: Price in designated token
-- royaltyPercentage: Creator royalty (base 1000, e.g., 50 = 5%)
-
-Returns: Token ID
-Events Emitted: NFTCreated(uint256 tokenId, address creator, uint256 maxSupply, uint256 price)
-```
-
-#### Mint NFT (Primary Market)
-```
-Function: buyNFT(address collection, uint256 tokenId, uint256 quantity)
-Parameters:
-- collection: Collection address
-- tokenId: NFT identifier
-- quantity: Number of copies to mint
-
-Requirements:
-- Collection must be registered
-- Sufficient token allowance
-- Within max supply limit
-- Drop must be active (for scheduled drops)
-
-Events Emitted: NFTSold(address collection, uint256 tokenId, address seller, address buyer, uint256 price, uint256 quantity)
-```
-
-### Trading Functions
-
-#### List NFT
-```
-Function: listNFT(address collection, uint256 tokenId, uint256 price, uint256 quantity)
-Parameters:
-- collection: Collection address
-- tokenId: NFT identifier
-- price: Listing price per unit
-- quantity: Number of copies to sell
-
-Requirements:
-- Must own NFTs
-- Collection must be registered
-- Marketplace must be approved
-
-Events Emitted: NFTListed(address collection, uint256 tokenId, address seller, uint256 price, uint256 quantity)
+NFTMarketplace
+├── Trading Functions
+├── Auction System
+└── Offer Management
 ```
 
-#### Buy Listed NFT
-```
-Function: buyListedNFT(address collection, uint256 tokenId, address seller, uint256 quantity)
-Parameters:
-- collection: Collection address
-- tokenId: NFT identifier
-- seller: Current owner's address
-- quantity: Number of copies to buy
+### Contract Relationships
 
-Requirements:
-- Active listing exists
-- Sufficient token allowance
-- Requested quantity available
-
-Events Emitted: NFTSold(address collection, uint256 tokenId, address seller, address buyer, uint256 price, uint256 quantity)
+1. **CollectionFactory**
+- Deploys and tracks collections
+- Manages collection verification
+- Interfaces with marketplace
+```solidity
+CollectionFactory {
+    address collectionImplementation;
+    address dropImplementation;
+    address marketplace;
+    mapping(address => bool) isCollectionCreatedByUs;
+}
 ```
 
-#### Remove Listing
+2. **BaseCollection**
+- ERC1155 NFT implementation
+- Handles NFT creation and metadata
+- Manages royalties
+```solidity
+BaseCollection {
+    string name;
+    string description;
+    address marketplace;
+    mapping(uint256 => NFTDetails) nftDetails;
+}
 ```
-Function: removeListing(address collection, uint256 tokenId)
-Parameters:
-- collection: Collection address
-- tokenId: NFT identifier
 
-Requirements:
-- Must be the listing creator
-- Active listing exists
-
-Events Emitted: ListingRemoved(address collection, uint256 tokenId, address seller)
+3. **Drop**
+- Extends BaseCollection
+- Adds time-lock functionality
+- Controls minting schedule
+```solidity
+Drop {
+    uint256 startTime;
+    // Inherits BaseCollection
+}
 ```
 
-## Fee Structure
+4. **NFTMarketplace**
+- Manages listings and trades
+- Handles auctions and offers
+- Processes fees and royalties
+```solidity
+NFTMarketplace {
+    uint256 primaryFee;      // Default 2.5%
+    uint256 secondaryFee;    // Default 1%
+    mapping(address => bool) registeredCollections;
+    mapping(...) listings;
+    mapping(...) auctions;
+    mapping(...) offers;
+}
+```
 
-### Primary Market
-- Platform Fee: 2.5% (configurable)
-- Creator Royalty: Set per NFT (max 10%)
+### Security Features
 
-### Secondary Market
-- Platform Fee: 1% (configurable)
-- Creator Royalty: Carries over from NFT creation
+1. **Access Control**
+- OwnableUpgradeable for admin functions
+- ReentrancyGuard for trading functions
+- Marketplace authorization checks
 
-## Error Scenarios
+2. **Validations**
+- Address checks
+- Amount verification
+- Time validations
+- Balance checks
 
-### Collection Creation
-- Invalid token address
-- Invalid start time (for drops)
-- Zero address parameters
+3. **Fee Management**
+- Configurable platform fees (0-10%)
+- Royalty enforcement
+- Secure fund distribution
 
-### NFT Creation
-- Invalid max supply (zero)
-- Invalid price (zero)
-- Excessive royalty percentage
-- Non-owner attempt
+### Dependencies
+- OpenZeppelin Upgradeable Contracts
+- ERC1155 and ERC20 standards
+- Custom interfaces for collection types
 
-### Trading
-- Insufficient balance
-- Insufficient allowance
-- Invalid listing
-- Expired listing
-- Quantity exceeds availability
-- Drop not started
+## Contract Details
+
+### BaseCollection
+
+#### Key Functions
+
+1. **Collection Management**
+```solidity
+function initialize(string _name, string _description, address _owner, address _marketplace)
+```
+- Initializes collection with basic details
+- Sets owner and authorized marketplace
+
+```solidity
+function createNFT(string _tokenURI, uint256 maxSupply, uint256 royaltyPercentage) returns (uint256)
+```
+- Creates new NFT type
+- Returns tokenId
+- Mints full supply to creator
+
+2. **View Functions**
+```solidity
+function nftDetails(uint256 tokenId) returns (NFTDetails)
+function uri(uint256 tokenId) returns (string)
+```
+
+### Drop
+
+#### Key Functions
+
+```solidity
+function initialize(..., uint256 _startTime)
+```
+- Extends BaseCollection initialization
+- Adds time-lock feature
+
+```solidity
+function setStartTime(uint256 _startTime)
+```
+- Updates release schedule
+- Only owner can call
+
+### NFTMarketplace
+
+#### Trading Functions
+
+1. **Fixed Price Trading**
+```solidity
+function listNFT(address collection, uint256 tokenId, uint256 price, uint256 quantity)
+function buyListedNFT(address collection, uint256 tokenId, address seller, uint256 quantity)
+function removeListing(address collection, uint256 tokenId)
+```
+
+2. **Auction System**
+```solidity
+function createAuction(
+    address collection,
+    uint256 tokenId,
+    uint256 quantity,
+    uint256 startPrice,
+    uint256 minBidIncrement,
+    uint256 duration
+) returns (uint256 auctionId)
+
+function placeBid(uint256 auctionId, uint256 bidAmount)
+function settleAuction(uint256 auctionId)
+function cancelAuction(uint256 auctionId)
+```
+
+3. **Offer System**
+```solidity
+function makeOffer(
+    address collection,
+    uint256 tokenId,
+    address seller,
+    uint256 quantity,
+    uint256 price
+) returns (uint256 offerId)
+
+function acceptOffer(uint256 offerId)
+function rejectOffer(uint256 offerId)
+function cancelOffer(uint256 offerId)
+```
+
+4. **Fee Management**
+```solidity
+function setPrimaryFee(uint256 _fee)     // 0-1000 (0-10%)
+function setSecondaryFee(uint256 _fee)   // 0-1000 (0-10%)
+function withdrawFees()                   // Owner only
+```
 
 ## Events Reference
 
-### CollectionCreated
-```
-Event: CollectionCreated(address collection, address owner, bool isDrop)
-- collection: New collection address
-- owner: Collection creator
-- isDrop: Collection type identifier
+### Collection Events
+```solidity
+event NFTCreated(uint256 indexed tokenId, address indexed creator, uint256 maxSupply)
+event StartTimeUpdated(uint256 newStartTime)  // Drop only
 ```
 
-### NFTCreated
-```
-Event: NFTCreated(uint256 tokenId, address creator, uint256 maxSupply, uint256 price)
-- tokenId: Unique identifier
-- creator: NFT creator
-- maxSupply: Maximum supply limit
-- price: Initial price
-```
-
-### NFTListed
-```
-Event: NFTListed(address collection, uint256 tokenId, address seller, uint256 price, uint256 quantity)
-- collection: Collection address
-- tokenId: NFT identifier
-- seller: Listing creator
-- price: Listed price
-- quantity: Available quantity
+### Marketplace Events
+```solidity
+event NFTListed(address collection, uint256 tokenId, address seller, uint256 price, uint256 quantity)
+event NFTSold(address collection, uint256 tokenId, address seller, address buyer, uint256 price)
+event AuctionCreated(uint256 auctionId, /* auction details */)
+event BidPlaced(uint256 auctionId, address bidder, uint256 amount)
+event OfferCreated(uint256 offerId, /* offer details */)
 ```
 
-### NFTSold
-```
-Event: NFTSold(address collection, uint256 tokenId, address seller, address buyer, uint256 price, uint256 quantity)
-- collection: Collection address
-- tokenId: NFT identifier
-- seller: Seller address
-- buyer: Buyer address
-- price: Sale price
-- quantity: Quantity sold
-```
+## Integration Guidelines
 
-### ListingRemoved
-```
-Event: ListingRemoved(address collection, uint256 tokenId, address seller)
-- collection: Collection address
-- tokenId: NFT identifier
-- seller: Listing creator
-```
+### Collection Creation
+1. Deploy via Factory
+2. Create NFTs after deployment
+3. For drops, set appropriate start time
 
-## Query Functions
+### Trading Flow
+1. Approve marketplace for NFT transfer
+2. Approve marketplace for ERC20 transfer
+3. Choose trading method:
+   - Fixed price listing
+   - Auction
+   - Make offer
 
-### Collection Queries
-```
-Function: getUserCollections(address user)
-Returns: address[] (Collection addresses owned by user)
+### Fee Calculations
+- Primary Sale: price * primaryFee / 10000
+- Secondary Sale: price * secondaryFee / 10000
+- Royalty: price * royaltyPercentage / 10000
 
-Function: getRegisteredCollections(uint256 offset, uint256 limit)
-Returns: (address[] collections, uint256 total)
-
-Function: getCollectionsByOwner(address owner, uint256 offset, uint256 limit)
-Returns: (address[] collections, uint256 total)
-```
-
-### NFT Queries
-```
-Function: nftDetails(uint256 tokenId)
-Returns: (
-    string uri,
-    uint256 maxSupply,
-    uint256 currentSupply,
-    address creator,
-    uint256 price,
-    uint256 royaltyPercentage
-)
-
-Function: getListing(address collection, uint256 tokenId, address seller)
-Returns: (
-    address seller,
-    uint256 price,
-    uint256 quantity
-)
-```
-
-This documentation provides a comprehensive overview of the NFT marketplace functionality. Developers can use this as a reference for integrating with the platform, understanding the available features, and handling various scenarios.
+### Error Handling
+- Check approval status
+- Verify sufficient balances
+- Handle transaction failures
+- Monitor events for confirmation
