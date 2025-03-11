@@ -11,30 +11,33 @@ contract Drop is BaseCollection, IDrop {
 
     function initialize(
         string memory _name,
-        string memory _description,
+        string memory _symbol,
         address _owner,
         address _marketplace,
-        uint256 _startTime
+        uint256 _startTime,
+        bool _isDrop
     ) public override {
         require(_startTime > block.timestamp, "Invalid start time");
         
         BaseCollection.initialize(
             _name,
-            _description,
+            _symbol,
             _owner,
-            _marketplace
+            _marketplace,
+            _isDrop
         );
         
         startTime = _startTime;
     }
 
     function createNFT(
+        string memory _name,
+        string memory _description,
         string memory _tokenURI,
-        uint256 maxSupply,
-        uint256 royaltyPercentage
+        uint256 maxSupply
     ) public virtual override returns (uint256) {
         require(block.timestamp >= startTime, "Drop not started");
-        return super.createNFT(_tokenURI, maxSupply, royaltyPercentage);
+        return super.createNFT(_name, _description, _tokenURI, maxSupply);
     }
 
     function setStartTime(uint256 _startTime) external onlyOwner {

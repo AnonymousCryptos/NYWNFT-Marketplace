@@ -6,9 +6,8 @@ contract NFTMarketplaceMock is NFTMarketplace {
     constructor(
         address _designatedToken,
         uint256 _primaryFee,
-        uint256 _secondaryFee,
-        uint256 _maxRoyaltyPercentage
-    ) NFTMarketplace(_designatedToken, _primaryFee, _secondaryFee, _maxRoyaltyPercentage) {
+        uint256 _secondaryFee
+    ) NFTMarketplace(_designatedToken, _primaryFee, _secondaryFee) {
         // _mint(msg.sender, initialSupply);
     }
     function updateAuctionStatus(uint256 _auctionId, bool isEnded) public {

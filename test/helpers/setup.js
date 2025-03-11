@@ -15,7 +15,6 @@ async function deployTestContracts() {
         token.address,    // designated token
         25,              // primaryFee (2.5%)
         10,              // secondaryFee (1%)
-        100              // maxRoyaltyPercentage (10%)
     );
     await marketplace.deployed();
 

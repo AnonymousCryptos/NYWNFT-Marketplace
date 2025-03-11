@@ -6,15 +6,16 @@ contract TestCaller {
     function testInitialize(
         address implementation,
         string memory name,
-        string memory description,
+        string memory symbol,
         address owner,
         address marketplace
     ) external {
         BaseCollection(implementation).initialize(
             name,
-            description,
+            symbol,
             owner,
-            marketplace
+            marketplace,
+            true
         );
     }
 }

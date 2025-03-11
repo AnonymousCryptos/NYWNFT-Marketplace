@@ -13,20 +13,23 @@ contract BaseCollection is
     ICollection 
 {
     string public name;
-    string public description;
+    string public symbol;
     address public marketplace;
+    uint16 internal royaltyPercentage;
+    bool public isDrop;
     
     uint256 private _tokenIds;
     mapping(uint256 => NFTDetails) private _nftDetails;
 
     function initialize(
         string memory _name,
-        string memory _description,
+        string memory _symbol,
         address _owner,
-        address _marketplace
+        address _marketplace,
+        bool _isDrop
     ) public initializer {
         require(bytes(_name).length > 0, "Invalid name");
-        require(bytes(_description).length > 0, "Invalid description");
+        require(bytes(_symbol).length > 0, "Invalid symbol");
         require(_owner != address(0), "Invalid owner");
         require(_marketplace != address(0), "Invalid marketplace");
 
@@ -35,34 +38,38 @@ contract BaseCollection is
         __ReentrancyGuard_init();
         
         name = _name;
-        description = _description;
+        symbol = _symbol;
         marketplace = _marketplace;
+        isDrop = _isDrop;
         
         transferOwnership(_owner);
     }
 
     function createNFT(
+        string memory _name,
+        string memory _description,
         string memory _tokenURI,
-        uint256 maxSupply,
-        uint256 royaltyPercentage
+        uint256 maxSupply
     ) public virtual override onlyOwner returns (uint256) {
+        require(bytes(_name).length > 0, "Invalid name");
+        require(bytes(_description).length > 0, "Invalid description");
         require(maxSupply > 0, "Invalid max supply");
-        require(royaltyPercentage <= 1000, "Royalty too high"); // Max 10%
 
         _tokenIds++;
         uint256 newTokenId = _tokenIds;
 
         _nftDetails[newTokenId] = NFTDetails({
+            name: _name,
+            description: _description,
             uri: _tokenURI,
             maxSupply: maxSupply,
-            creator: msg.sender,
-            royaltyPercentage: royaltyPercentage
+            creator: msg.sender
         });
 
         // Mint all NFTs to creator immediately
         _mint(msg.sender, newTokenId, maxSupply, "");
 
-        emit NFTCreated(newTokenId, msg.sender, maxSupply);
+        emit NFTCreated(_name, _description, newTokenId, msg.sender, maxSupply);
         return newTokenId;
     }
 
@@ -72,5 +79,14 @@ contract BaseCollection is
 
     function uri(uint256 tokenId) public view virtual override returns (string memory) {
         return _nftDetails[tokenId].uri;
+    }
+
+    function updateRoyaltyPercentage(uint16 _royaltyPercentage) onlyOwner external {
+        require(_royaltyPercentage <= 100, "Royalty too high");
+        royaltyPercentage = _royaltyPercentage;
+    }
+
+    function getRoyaltyPercentage() external view returns(uint16) {
+        return royaltyPercentage;
     }
 }

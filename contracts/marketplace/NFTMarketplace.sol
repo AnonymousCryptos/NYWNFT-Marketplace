@@ -59,7 +59,6 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
     
     uint256 public primaryFee;
     uint256 public secondaryFee;
-    uint256 public maxRoyaltyPercentage;
     address public collectionFactory;
     uint256 public totalCollections;
     IERC20 public immutable designatedToken;
@@ -130,7 +129,6 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
     event AuctionExtended(uint256 indexed auctionId, uint256 newEndTime);
 
     event FeeUpdated(bool isPrimary, uint256 newFee);
-    event MaxRoyaltyUpdated(uint256 newMaxRoyalty);
     event CollectionRegistered(address indexed collection);
     event AuctionExtensionIntervalUpdated(uint256 newInterval);
 
@@ -151,18 +149,15 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
     constructor(
         address _designatedToken,
         uint256 _primaryFee,
-        uint256 _secondaryFee,
-        uint256 _maxRoyaltyPercentage
+        uint256 _secondaryFee
     ) {
         require(_designatedToken != address(0), "Invalid token address");
         require(_primaryFee <= 1000, "Primary fee too high");
         require(_secondaryFee <= 1000, "Secondary fee too high");
-        require(_maxRoyaltyPercentage <= 1000, "Max royalty too high");
         
         designatedToken = IERC20(_designatedToken);
         primaryFee = _primaryFee;
         secondaryFee = _secondaryFee;
-        maxRoyaltyPercentage = _maxRoyaltyPercentage;
         minAuctionDuration = 1 hours;
         maxAuctionDuration = 30 days;
         auctionExtensionInterval = 10 minutes;
@@ -195,12 +190,6 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         require(_fee <= 1000, "Fee too high");
         secondaryFee = _fee;
         emit FeeUpdated(false, _fee);
-    }
-    
-    function setMaxRoyaltyPercentage(uint256 _maxRoyalty) external onlyOwner {
-        require(_maxRoyalty <= 1000, "Max royalty too high");
-        maxRoyaltyPercentage = _maxRoyalty;
-        emit MaxRoyaltyUpdated(_maxRoyalty);
     }
     
     function listNFT(
@@ -291,14 +280,17 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         if(nftDetails.creator == seller) {
             fee = primaryFee;
         }
+        uint16 royaltyPercentage = ICollection(collection).getRoyaltyPercentage();
         uint256 totalPrice = listing.price * quantity;
         uint256 platformFee = (totalPrice * fee) / 1000;
-        uint256 royaltyFee  = (totalPrice * nftDetails.royaltyPercentage) / 1000;
+        uint256 royaltyFee  = (totalPrice * royaltyPercentage) / 1000;
         uint256 sellerAmount = totalPrice - platformFee - royaltyFee;
         
         designatedToken.transferFrom(msg.sender, address(this), platformFee);
-        designatedToken.transferFrom(msg.sender, nftDetails.creator, royaltyFee);
         designatedToken.transferFrom(msg.sender, seller, sellerAmount);
+        if(royaltyFee > 0) {
+            designatedToken.transferFrom(msg.sender, nftDetails.creator, royaltyFee);
+        }
         
         IERC1155(collection).safeTransferFrom(seller, msg.sender, tokenId, quantity, "");
         
@@ -579,15 +571,17 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         if(nftDetails.creator == auction.seller) {
             fee = primaryFee;
         }
-
+        uint16 royaltyPercentage = ICollection(collection).getRoyaltyPercentage();
         // Calculate fees
         uint256 platformFee = (finalPrice * fee) / 1000;
-        uint256 royaltyFee = (finalPrice * nftDetails.royaltyPercentage) / 1000;
+        uint256 royaltyFee = (finalPrice * royaltyPercentage) / 1000;
         uint256 sellerAmount = finalPrice - platformFee - royaltyFee;
 
         // Distribute funds
-        designatedToken.transfer(nftDetails.creator, royaltyFee);
         designatedToken.transfer(auction.seller, sellerAmount);
+        if(royaltyFee>0) {
+            designatedToken.transfer(nftDetails.creator, royaltyFee);
+        }
 
         // Transfer NFT
         IERC1155(collection).safeTransferFrom(
@@ -768,11 +762,12 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         if(nftDetails.creator == msg.sender) {
             fee = primaryFee;
         }
+        uint16 royaltyPercentage = ICollection(collection).getRoyaltyPercentage();
 
         // Calculate fees
         uint256 totalPrice = offer.price * offer.quantity;
         uint256 platformFee = (totalPrice * fee) / 1000;
-        uint256 royaltyFee = (totalPrice * nftDetails.royaltyPercentage) / 1000;
+        uint256 royaltyFee = (totalPrice * royaltyPercentage) / 1000;
         uint256 sellerAmount = totalPrice - platformFee - royaltyFee;
 
         // Transfer NFT
@@ -785,8 +780,11 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         );
 
         // Distribute payments
-        designatedToken.transfer(nftDetails.creator, royaltyFee);
         designatedToken.transfer(msg.sender, sellerAmount);
+        if(royaltyFee>0) {
+            designatedToken.transfer(nftDetails.creator, royaltyFee);
+        }
+        
 
         offer.status = OfferStatus.ACCEPTED;
         emit OfferAccepted(offerId, msg.sender);
@@ -1002,15 +1000,17 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
             if(nftDetails.creator == purchase.seller) {
                 fee = primaryFee;
             }
-            
+            uint16 royaltyPercentage = ICollection(purchase.collection).getRoyaltyPercentage();
             uint256 totalPrice = listing.price * purchase.quantity;
             uint256 platformFee = (totalPrice * fee) / 1000;
-            uint256 royaltyFee = (totalPrice * nftDetails.royaltyPercentage) / 1000;
+            uint256 royaltyFee = (totalPrice * royaltyPercentage) / 1000;
             uint256 sellerAmount = totalPrice - platformFee - royaltyFee;
 
             designatedToken.transferFrom(msg.sender, address(this), platformFee);
-            designatedToken.transferFrom(msg.sender, nftDetails.creator, royaltyFee);
             designatedToken.transferFrom(msg.sender, purchase.seller, sellerAmount);
+            if(royaltyFee>0) {
+                designatedToken.transferFrom(msg.sender, nftDetails.creator, royaltyFee);
+            }
 
             IERC1155(purchase.collection).safeTransferFrom(
                 purchase.seller, 

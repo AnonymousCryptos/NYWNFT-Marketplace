@@ -42,29 +42,31 @@ contract CollectionFactory is Ownable {
     
     function createCollection(
         string memory name,
-        string memory description,
+        string memory symbol,
         bool isDrop,
         uint256 startTime
     ) external returns (address) {
         require(bytes(name).length > 0, "Invalid name");
-        require(bytes(description).length > 0, "Invalid description");
+        require(bytes(symbol).length > 0, "Invalid description");
         address implementation = isDrop ? dropImplementation : collectionImplementation;
         address clone = Clones.clone(implementation);
         
         if (isDrop) {
             IDrop(clone).initialize(
                 name,
-                description,
+                symbol,
                 msg.sender,
                 marketplace,
-                startTime
+                startTime,
+                isDrop
             );
         } else {
             ICollection(clone).initialize(
                 name,
-                description,
+                symbol,
                 msg.sender,
-                marketplace
+                marketplace,
+                isDrop
             );
         }
         

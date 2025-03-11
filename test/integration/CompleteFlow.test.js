@@ -23,7 +23,7 @@ describe("Complete Flow", function () {
         // Create Collection
         const tx = await factory.connect(creator).createCollection(
             "Test Collection",
-            "Test Description",
+            "Test Symbol",
             false,
             0
         );
@@ -33,9 +33,10 @@ describe("Complete Flow", function () {
 
         // Create NFT
         await collection.connect(creator).createNFT(
+            "Token 1",
+            "Desc 1",
             "ipfs://test",
-            100,
-            50
+            100
         );
         const tokenId = 1;
         expect(await collection.balanceOf(creator.address, tokenId)).to.equal(100);
@@ -77,7 +78,7 @@ describe("Complete Flow", function () {
         // Create Drop
         const tx = await factory.connect(creator).createCollection(
             "Test Drop",
-            "Test Description",
+            "Test Symbol",
             true,
             startTime
         );
@@ -87,18 +88,20 @@ describe("Complete Flow", function () {
         // Should not be able to create nft before start time.
         await expect(
             drop.connect(creator).createNFT(
+                "Token 1",
+                "Desc 1",
                 "ipfs://test",
-                100,
-                50)
+                100)
             
         ).to.be.revertedWith("Drop not started");
 
         // Buy after start time
         await time.increaseTo(startTime + 1);
         drop.connect(creator).createNFT(
+            "Token 1",
+            "Desc 1",
             "ipfs://test",
-            100,
-            50)
+            100)
         const tokenId = 1;
         // Primary Sale
         await primarySale(drop, marketplace, creator, tokenId, token, buyer, 1,100,ethers.utils.parseEther("2"));
@@ -130,7 +133,7 @@ describe("Complete Flow", function () {
         // Create Collection
         const tx = await factory.connect(creator).createCollection(
             "Test Collection",
-            "Test Description",
+            "Test Symbol",
             false,
             0
         );
@@ -138,8 +141,8 @@ describe("Complete Flow", function () {
         const collection = await ethers.getContractAt("BaseCollection", receipt.events.find(e => e.event === "CollectionCreated").args.collection);
 
         // Create NFTs
-        await collection.connect(creator).createNFT("ipfs://test1", 100, 50);
-        await collection.connect(creator).createNFT("ipfs://test2", 50, 30);
+        await collection.connect(creator).createNFT("Token 1","Desc 1","ipfs://test1", 100);
+        await collection.connect(creator).createNFT("Token 2","Desc 2","ipfs://test2", 50);
 
         // Buy NFTs
         await token.connect(buyer).approve(marketplace.address, ethers.utils.parseEther("100"));
@@ -188,7 +191,7 @@ describe("Complete Flow", function () {
         // Create Collection and NFT
         const tx = await factory.connect(creator).createCollection(
             "Test Collection",
-            "Test Description",
+            "Test Symbol",
             false,
             0
         );
@@ -196,9 +199,10 @@ describe("Complete Flow", function () {
         const collection = await ethers.getContractAt("BaseCollection", receipt.events.find(e => e.event === "CollectionCreated").args.collection);
 
         await collection.connect(creator).createNFT(
+            "Token 1",
+            "Desc 1",
             "ipfs://test",
-            100,
-            50
+            100
         );
         const tokenId = 1;
 
@@ -260,7 +264,7 @@ describe("Complete Flow", function () {
         // Create Collection and NFT
         const tx = await factory.connect(creator).createCollection(
             "Test Collection",
-            "Test Description",
+            "Test Symbol",
             false,
             0
         );
@@ -268,9 +272,10 @@ describe("Complete Flow", function () {
         const collection = await ethers.getContractAt("BaseCollection", receipt.events.find(e => e.event === "CollectionCreated").args.collection);
 
         await collection.connect(creator).createNFT(
+            "Token 1",
+            "Desc 1",
             "ipfs://test",
-            100,
-            50
+            100
         );
         const tokenId = 1;
 
@@ -310,7 +315,7 @@ describe("Complete Flow", function () {
         // Create Collection and NFT
         const tx = await factory.connect(creator).createCollection(
             "Test Collection",
-            "Test Description",
+            "Test Symbol",
             false,
             0
         );
@@ -318,9 +323,10 @@ describe("Complete Flow", function () {
         const collection = await ethers.getContractAt("BaseCollection", receipt.events.find(e => e.event === "CollectionCreated").args.collection);
 
         await collection.connect(creator).createNFT(
+            "Token 1",
+            "Desc 1",
             "ipfs://test",
-            100,
-            50
+            100
         );
         const tokenId = 1;
 
@@ -379,7 +385,7 @@ describe("Complete Flow", function () {
         // Create Collection and NFT
         const tx = await factory.connect(creator).createCollection(
             "Test Collection",
-            "Test Description",
+            "Test Symbol",
             false,
             0
         );
@@ -387,9 +393,10 @@ describe("Complete Flow", function () {
         const collection = await ethers.getContractAt("BaseCollection", receipt.events.find(e => e.event === "CollectionCreated").args.collection);
 
         await collection.connect(creator).createNFT(
+            "Token 1",
+            "Desc 1",
             "ipfs://test",
-            100,
-            50
+            100
         );
         const tokenId = 1;
 
@@ -447,7 +454,7 @@ describe("Complete Flow", function () {
         let collection1 = await ethers.getContractAt("BaseCollection", event.args.collection);
         const tx2 = await factory.connect(seller).createCollection(
             "Test Collection",
-            "Test Description",
+            "Test Symbol",
             false,
             0
         );
@@ -458,19 +465,22 @@ describe("Complete Flow", function () {
         // Create nfts across various collections
 
         await collection1.connect(creator).createNFT(
+            "Token 1",
+            "Desc 1",
             "ipfs://test",
-            10,
-            50
+            10
         );
         await collection1.connect(creator).createNFT(
+            "Token 2",
+            "Desc 2",
             "ipfs://test",
-            30,
-            50
+            30
         );
         await collection2.connect(seller).createNFT(
+            "Token 3",
+            "Desc 3",
             "ipfs://test",
-            11,
-            50
+            11
         );
         // list and buy 1 nft to test secondary sale also
         await primarySale(collection1, marketplace, creator, 1, token, seller, 10, 100, ethers.utils.parseEther("1"));
@@ -501,6 +511,8 @@ describe("Complete Flow", function () {
         await collection1.connect(creator).setApprovalForAll(marketplace.address, true);
         await collection1.connect(seller).setApprovalForAll(marketplace.address, true);
         await collection2.connect(seller).setApprovalForAll(marketplace.address, true);
+
+        await collection2.connect(seller).updateRoyaltyPercentage(100);
 
         await marketplace.connect(buyer).batchBuyListedNFTs([
             {

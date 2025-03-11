@@ -5,7 +5,7 @@ contract MockReentrantBaseCollection is BaseCollection {
     uint256 public reentryFunction;
     
     constructor(address _marketPlace) {
-        super.initialize("name","desc",msg.sender,_marketPlace);
+        super.initialize("name","sym",msg.sender,_marketPlace,true);
     }
 
     function setReentryFunction(uint256 _function) external {
@@ -44,10 +44,11 @@ contract MockReentrantBaseCollection is BaseCollection {
 
     function nftDetails(uint256 tokenId) external override view returns (NFTDetails memory) {
         return NFTDetails({
+            name: "name",
+            description: "desc",
             uri: "",
             maxSupply: 100,
-            creator: msg.sender,
-            royaltyPercentage: 100
+            creator: msg.sender
         });
 
     }
