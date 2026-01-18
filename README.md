@@ -11,7 +11,7 @@ A decentralized NFT marketplace built on Ethereum that supports ERC1155 tokens, 
 - 🎨 ERC1155 NFT Collections
 - ⏰ Time-based NFT Drops
 - 💰 Fixed Price Trading
-- 🔨 English Auctions
+- 🔨 English Auctions System
 - 💫 Offer System
 - 💸 Configurable Fees & Royalties
 - 📦 Batch Operations
@@ -78,6 +78,7 @@ NYWNFT-Marketplace/
 │       └── commonFunctions.js
 └── docs/
     └── Document.md
+```
 
 Current gas estimates:
 - Collection Deployment: ~2.5M gas
