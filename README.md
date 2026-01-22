@@ -11,7 +11,7 @@ A decentralized NFT marketplace built on Ethereum that supports ERC1155 tokens, 
 - 🎨 ERC1155 NFT Collections
 - ⏰ Time-based NFT Drops
 - 💰 Fixed Price Trading
-- 🔨 English Auctions
+- 🔨 English Auctions System
 - 💫 Offer System
 - 💸 Configurable Fees & Royalties
 - 📦 Batch Operations
@@ -66,10 +66,21 @@ NYWNFT-Marketplace/
 │   │   └── IDrop.sol
 │   └── marketplace/
 │       └── NFTMarketplace.sol
+│   └── mocks/
+│   │   ├── MockERC1155.sol
+│   │   ├── MockERC20.sol
+│   │   ├── MockReentrantBaseCollection.sol
+│   │   ├── NFTMarketplaceMock.sol
+│   │   ├── ReentrantERC1155Mock.sol
+│   │   ├── ReentrantMock.sol
+│   │   ├── TestCallerMock.sol
+│   │   └── TestMinterMock.sol
+│   
 ├── test/
 │   ├── unit/
 │   │   ├── BaseCollection.test.js
 │   │   ├── Drop.test.js
+│   │   ├── NFTMarketplace.test.js
 │   │   └── CollectionFactory.test.js
 │   ├── integration/
 │   │   └── CompleteFlow.test.js
@@ -78,6 +89,7 @@ NYWNFT-Marketplace/
 │       └── commonFunctions.js
 └── docs/
     └── Document.md
+```
 
 Current gas estimates:
 - Collection Deployment: ~2.5M gas
