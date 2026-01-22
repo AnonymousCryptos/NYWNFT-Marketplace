@@ -281,7 +281,7 @@ function cancelOffer(uint256 offerId)
 ```solidity
 function setPrimaryFee(uint256 _fee)     // 0-1000 (0-10%)
 function setSecondaryFee(uint256 _fee)   // 0-1000 (0-10%)
-function withdrawFees()                   // Owner only
+function withdrawFees()                   // Owner only (currently disabled, rework is needed)
 ```
 
 ## Events Reference
