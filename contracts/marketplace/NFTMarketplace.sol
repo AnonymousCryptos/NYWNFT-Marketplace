@@ -8,8 +8,10 @@ import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "../interfaces/ICollection.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
+    using SafeERC20 for IERC20;
     enum ListingType { FIXED_PRICE, AUCTION }
     enum AuctionStatus { ACTIVE, ENDED, CANCELLED }
     enum OfferStatus { PENDING, ACCEPTED, REJECTED, CANCELLED }
@@ -61,6 +63,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
     uint256 public secondaryFee;
     address public collectionFactory;
     uint256 public totalCollections;
+    uint256 public amountLockedInPool;
     IERC20 public immutable designatedToken;
 
     uint256 private _auctionIds;
@@ -286,10 +289,10 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         uint256 royaltyFee  = (totalPrice * royaltyPercentage) / 1000;
         uint256 sellerAmount = totalPrice - platformFee - royaltyFee;
         
-        designatedToken.transferFrom(msg.sender, address(this), platformFee);
-        designatedToken.transferFrom(msg.sender, seller, sellerAmount);
+        designatedToken.safeTransferFrom(msg.sender, address(this), platformFee);
+        designatedToken.safeTransferFrom(msg.sender, seller, sellerAmount);
         if(royaltyFee > 0) {
-            designatedToken.transferFrom(msg.sender, nftDetails.creator, royaltyFee);
+            designatedToken.safeTransferFrom(msg.sender, nftDetails.creator, royaltyFee);
         }
         
         IERC1155(collection).safeTransferFrom(seller, msg.sender, tokenId, quantity, "");
@@ -364,15 +367,12 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         return (_collections, count);
     }
     
-    /*
-    Need rework, it will send all the tokens to owner, even the tokens locked for auction.
-    */
-    // function withdrawFees() external onlyOwner {
-    //     uint256 balance = designatedToken.balanceOf(address(this));
-    //     if (balance > 0) {
-    //         designatedToken.transfer(owner(), balance);
-    //     }
-    // }
+    function withdrawFees() external onlyOwner {
+        uint256 unlockedBalance = designatedToken.balanceOf(address(this)) - amountLockedInPool;
+        if (unlockedBalance > 0) {
+            designatedToken.safeTransfer(owner(), unlockedBalance);
+        }
+    }
     
     function getListing(
         address collection,
@@ -542,19 +542,19 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
 
         address previousBidder = auction.highestBidder;
         uint256 previousBid = bids[auctionId][previousBidder];
+    
+        designatedToken.safeTransferFrom(msg.sender, address(this), bidAmount);
 
         if (previousBidder != address(0)) {
-            designatedToken.transfer(previousBidder, previousBid);
+            designatedToken.safeTransfer(previousBidder, previousBid);
         }
-
-        require(
-            designatedToken.transferFrom(msg.sender, address(this), bidAmount),
-            "Transfer failed"
-        );
 
         auction.highestBidder = msg.sender;
         auction.currentPrice = bidAmount;
+        bids[auctionId][previousBidder] = 0;
         bids[auctionId][msg.sender] = bidAmount;
+        // locking the amount in pool
+        amountLockedInPool += bidAmount - previousBid; 
 
         emit BidPlaced(auctionId, msg.sender, bidAmount);
     }
@@ -581,9 +581,9 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         uint256 sellerAmount = finalPrice - platformFee - royaltyFee;
 
         // Distribute funds
-        designatedToken.transfer(auction.seller, sellerAmount);
+        designatedToken.safeTransfer(auction.seller, sellerAmount);
         if(royaltyFee>0) {
-            designatedToken.transfer(nftDetails.creator, royaltyFee);
+            designatedToken.safeTransfer(nftDetails.creator, royaltyFee);
         }
 
         // Transfer NFT
@@ -594,6 +594,9 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
             auction.quantity,
             ""
         );
+
+        // freeing the locked amount after auctions settled
+        amountLockedInPool -= finalPrice;
 
         // Remove listing
         address seller = auction.seller;
@@ -667,8 +670,11 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         offerCollections[offerId] = collection;
         offerTokenIds[offerId] = tokenId;
 
+        // Locking amount in pool
+        amountLockedInPool += (price * quantity);
+
         // Pre-approve marketplace for token transfer
-        designatedToken.transferFrom(msg.sender, address(this), price * quantity);
+        designatedToken.safeTransferFrom(msg.sender, address(this), price * quantity);
 
         emit OfferCreated(offerId, collection, tokenId, msg.sender, seller, price, quantity);
     }
@@ -783,10 +789,13 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         );
 
         // Distribute payments
-        designatedToken.transfer(msg.sender, sellerAmount);
+        designatedToken.safeTransfer(msg.sender, sellerAmount);
         if(royaltyFee>0) {
-            designatedToken.transfer(nftDetails.creator, royaltyFee);
+            designatedToken.safeTransfer(nftDetails.creator, royaltyFee);
         }
+
+        // freeing the amount after offer acceptance
+        amountLockedInPool -= totalPrice;
         
 
         offer.status = OfferStatus.ACCEPTED;
@@ -801,14 +810,17 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         Offer storage offer = offers[collection][tokenId][offerId];
         require(offer.status == OfferStatus.PENDING, "Invalid offer status");
         require(
-            IERC1155(collection).balanceOf(msg.sender, tokenId) > 0,
-            "Not token owner"
+            msg.sender == offer.seller,
+            "Not offer recipient"
         );
 
         offer.status = OfferStatus.REJECTED;
 
         // Refund buyer
-        designatedToken.transfer(offer.buyer, offer.price * offer.quantity);
+        designatedToken.safeTransfer(offer.buyer, offer.price * offer.quantity);
+
+        // freeing locked amount after offer rejection
+        amountLockedInPool -= (offer.price * offer.quantity);
 
         emit OfferRejected(offerId, msg.sender);
     }
@@ -825,7 +837,10 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         offer.status = OfferStatus.CANCELLED;
 
         // Refund buyer
-        designatedToken.transfer(msg.sender, offer.price * offer.quantity);
+        designatedToken.safeTransfer(msg.sender, offer.price * offer.quantity);
+
+        // freeing the locked amount after offer cancellation
+        amountLockedInPool -= (offer.price * offer.quantity);
 
         emit OfferCancelled(offerId, msg.sender);
     }
@@ -1009,10 +1024,10 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
             uint256 royaltyFee = (totalPrice * royaltyPercentage) / 1000;
             uint256 sellerAmount = totalPrice - platformFee - royaltyFee;
 
-            designatedToken.transferFrom(msg.sender, address(this), platformFee);
-            designatedToken.transferFrom(msg.sender, purchase.seller, sellerAmount);
+            designatedToken.safeTransferFrom(msg.sender, address(this), platformFee);
+            designatedToken.safeTransferFrom(msg.sender, purchase.seller, sellerAmount);
             if(royaltyFee>0) {
-                designatedToken.transferFrom(msg.sender, nftDetails.creator, royaltyFee);
+                designatedToken.safeTransferFrom(msg.sender, nftDetails.creator, royaltyFee);
             }
 
             IERC1155(purchase.collection).safeTransferFrom(
