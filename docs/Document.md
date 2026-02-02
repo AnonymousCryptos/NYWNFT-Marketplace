@@ -121,7 +121,7 @@ NFTMarketplace
 1. **CollectionFactory**
 - Deploys and tracks collections
 - Manages collection verification
-- Interfaces with marketplace
+- Interfaces with the marketplace
 ```solidity
 CollectionFactory {
     address collectionImplementation;
@@ -209,9 +209,9 @@ function initialize(string _name, string _description, address _owner, address _
 ```solidity
 function createNFT(string _tokenURI, uint256 maxSupply, uint256 royaltyPercentage) returns (uint256)
 ```
-- Creates new NFT type
+- Creates a new NFT type
 - Returns tokenId
-- Mints full supply to creator
+- Mints full supply to the creator
 
 2. **View Functions**
 ```solidity
@@ -233,7 +233,7 @@ function initialize(..., uint256 _startTime)
 function setStartTime(uint256 _startTime)
 ```
 - Updates release schedule
-- Only owner can call
+- Only the owner can call
 
 ### NFTMarketplace
 
@@ -306,15 +306,15 @@ event OfferCreated(uint256 offerId, /* offer details */)
 ### Collection Creation
 1. Deploy via Factory
 2. Create NFTs after deployment
-3. For drops, set appropriate start time
+3. For drops, set the appropriate start time
 
 ### Trading Flow
-1. Approve marketplace for NFT transfer
-2. Approve marketplace for ERC20 transfer
+1. Approve the marketplace for NFT transfer
+2. Approve the marketplace for ERC20 transfer
 3. Choose trading method:
    - Fixed price listing
    - Auction
-   - Make offer
+   - Make an offer
 
 ### Fee Calculations
 - Primary Sale: price * primaryFee / 10000
