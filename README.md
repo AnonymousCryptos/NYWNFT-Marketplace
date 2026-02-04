@@ -1,6 +1,6 @@
 # NFT Marketplace
 
-A decentralized NFT marketplace built on an EVM-based network that supports ERC1155 tokens, auctions, offers, Fixed price, and time-based drops.
+A decentralized NFT marketplace built on an EVM-based network that supports NFT creation, auctions, offers, Fixed price, and time-based drops.
 
 ![Solidity](https://img.shields.io/badge/solidity-^0.8.17-lightgrey.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
@@ -117,7 +117,7 @@ git checkout -b feature/my-new-feature
 ```
 3. Commit your changes:
 ```bash
-git commit -am 'Add some feature'
+git commit -am 'Add some feature.'
 ```
 4. Push to the branch:
 ```bash
