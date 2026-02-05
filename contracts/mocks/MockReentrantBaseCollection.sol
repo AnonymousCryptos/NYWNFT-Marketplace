@@ -11,6 +11,7 @@ contract MockReentrantBaseCollection is BaseCollection {
     function setReentryFunction(uint256 _function) external {
         reentryFunction = _function;
     }
+    // malicious function to test reentrancy attack cases
     function safeTransferFrom(
         address from,
         address to,
