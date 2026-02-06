@@ -2,6 +2,7 @@ pragma solidity ^0.8.17;
 
 import "../marketplace/NFTMarketplace.sol";
 
+// Mock contract to adjust the state of the contract forcefully to create the desired scenario to test
 contract NFTMarketplaceMock is NFTMarketplace {
     constructor(
         address _designatedToken,
