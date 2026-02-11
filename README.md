@@ -133,5 +133,5 @@ git push origin feature/my-new-feature
 ## Acknowledgments
 
 - OpenZeppelin – used for contract implementations
-- Hardhat – used as the development framework
+- Hardhat – used as the development framework for the project.
 - Ethers.js – used for testing and interaction with contracts
