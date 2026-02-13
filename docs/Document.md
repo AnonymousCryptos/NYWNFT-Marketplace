@@ -65,9 +65,9 @@ Features:
 - Settlement and cancellation options
 
 States:
-- ACTIVE: Ongoing auction
-- ENDED: Completed auction
-- CANCELLED: Terminated auction
+- ACTIVE: Auction is ongoing
+- ENDED: Auction completed
+- CANCELLED: Auction is terminated
 
 #### Offer System
 Features:
@@ -78,10 +78,10 @@ Features:
 - Automatic payment handling
 
 States:
-- PENDING: Active offer
-- ACCEPTED: Completed offer
-- REJECTED: Declined offer
-- CANCELLED: Withdrawn offer
+- PENDING: Offer is active
+- ACCEPTED: Offer is completed
+- REJECTED: Offer is declined
+- CANCELLED: Offer is withdrawn
 
 ### 3. Fee Structure
 
