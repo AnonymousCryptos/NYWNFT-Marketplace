@@ -10,7 +10,7 @@
 
 ## System Overview
 
-The NFT Marketplace is a comprehensive platform for trading ERC1155 tokens with multiple trading mechanisms and configurable fees.
+The NFT Marketplace is a comprehensive platform for creating & trading ERC1155 tokens with multiple trading mechanisms and configurable fees.
 
 ### Supported Standards
 - NFTs: ERC1155 (Multi-token standard)
