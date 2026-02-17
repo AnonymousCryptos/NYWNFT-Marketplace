@@ -42,12 +42,12 @@ Compile contracts:
 npx hardhat compile
 ```
 
-Run all tests:
+Run all the tests:
 ```bash
 npx hardhat test
 ```
 
-Run specific testcase file:
+Run a specific testcase file:
 ```bash
 npx hardhat test test/unit/BaseCollection.test.js
 ```
